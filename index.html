@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<!--
+  ══════════════════════════════════════════════════════════
+  《末班车的心动》可玩 Demo · 第 1–3 程完整版
+  视觉基座：design-demos/B-参照.html（方向 B · 现实参照迁移，Gate 2 已选定）
+  ══════════════════════════════════════════════════════════
+
+  【form 来自内容的哪里】
+  全部剧情都发生在「一节车厢」里：车厢是外壳，车窗是内外的边界，
+  速写本与便签是内心递向世界的纸。所以整屏以「手账里夹着的一节
+  车厢」为 form 的种子——上部永远是窗（世界：夜、隧道、雨），
+  下部是手账页（内心：文案、座位、字块）；便签从手账里长出来贴向
+  窗，完成「内心→世界」的移动。暖纸底与暮蓝 accent 与概念页同源。
+
+  【红线】单文件 · 纯 HTML/CSS/vanilla JS · 零图片零外部依赖 ·
+  人物永远剪影/背影/局部（马尾、帆布包、持笔的手），绝不画五官。
+  ══════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0d0c0b">
+<title>末班车的心动 · 可玩 Demo</title>
+<style>
+  :root {
+    --paper: #F7F4EF;
+    --ink: #262320;
+    --ink-soft: #6a6259;
+    --dusk: oklch(0.45 0.09 255);
+    --dusk-wash: oklch(0.93 0.025 255);
+    --warm: oklch(0.83 0.09 75);
+    --hairline: #ddd6cb;
+    --serif: "Newsreader", "Noto Serif SC", "Songti SC", serif;
+    --sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html { font-synthesis:none; line-break:strict; hanging-punctuation:first allow-end; }
+  body {
+    background:#0d0c0b; color:var(--ink);
+    font-family:var(--sans); font-size:16px; line-height:1.8;
+    display:flex; justify-content:center; align-items:flex-start;
+    min-height:100vh; padding:24px 12px; text-wrap:pretty;
+  }
+  .bezel {
+    width:100%; max-width:480px; background:var(--paper);
+    border-radius:34px; overflow:hidden; position:relative;
+    box-shadow:0 0 0 10px #171614, 0 30px 80px rgba(0,0,0,.75);
+    display:flex; flex-direction:column; height:844px; max-height:calc(100vh - 48px);
+    min-height:640px;
+  }
+  /* ── 顶栏 ─────────────────────────────── */
+  .top {
+    padding:16px 24px 10px; display:flex; justify-content:space-between; align-items:center;
+    border-bottom:1px solid var(--hairline); flex:none; position:relative; z-index:40;
+    background:var(--paper);
+  }
+  .top .ch { font-family:var(--serif); font-size:14px; color:var(--ink-soft); letter-spacing:.12em; }
+  .top .ch b { color:var(--dusk); font-weight:600; }
+  .top .r { display:flex; align-items:center; gap:12px; }
+  .top .meta { font-size:11.5px; letter-spacing:.18em; color:var(--ink-soft); font-variant-numeric:tabular-nums; }
+  #audioBtn {
+    width:32px; height:32px; border:1px solid var(--hairline); background:transparent;
+    color:var(--ink-soft); cursor:pointer; display:flex; align-items:center; justify-content:center;
+    border-radius:8px; transition:color .2s, border-color .2s; flex:none;
+  }
+  #audioBtn:hover { color:var(--dusk); border-color:var(--dusk); }
+  #audioBtn svg { display:block; }
+  #audioBtn .ml { display:none; }
+  #audioBtn.off .wv { display:none; }
+  #audioBtn.off .ml { display:block; }
+  /* ── 舞台系统：crossfade + 轻微上移 200ms ── */
+  .canvas { flex:1; position:relative; overflow:hidden; }
+  .stage {
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    opacity:0; pointer-events:none; transform:translateY(10px);
+    transition:opacity .2s ease-out, transform .2s ease-out;
+    overflow-y:auto; padding:20px 26px 26px; z-index:1;
+  }
+  .stage.on { opacity:1; pointer-events:auto; transform:none; z-index:45; }
+  /* 离场层不透明垫底，入场层在其上淡入：crossfade 期间画面永不露底 */
+  .stage.leaving { opacity:1; transform:none; pointer-events:none; z-index:2;
+    transition:opacity .2s ease-out; }
+  .stage.leaving.fade { opacity:0; }
+  .hint {
+    font-size:12px; letter-spacing:.16em; color:var(--ink-soft);
+    display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px;
+  }
+  /* 叙事文本（打字机 · 点击跳过） */
+  .tw { flex:1; display:flex; flex-direction:column; justify-content:center; cursor:pointer; min-height:120px; }
+  .tw p {
+    font-family:var(--serif); font-size:18.5px; line-height:2.0; font-weight:500; color:var(--ink);
+    margin-bottom:8px; min-height:1em;
+  }
+  .tw p em { font-style:normal; color:var(--dusk); }
+  .tw p.dim { color:var(--ink-soft); font-size:16px; }
+  .kicker { font-size:11px; letter-spacing:.32em; color:var(--ink-soft); margin-bottom:14px; }
+  .bignum {
+    font-family:var(--serif); font-weight:600; font-size:64px; letter-spacing:.04em;
+    color:var(--ink); line-height:1.15; font-variant-numeric:tabular-nums;
+  }
+  .bignum small { font-size:20px; color:var(--ink-soft); letter-spacing:.2em; margin-left:10px; }
+  .btn {
+    display:inline-block; text-align:center; padding:13px 26px; cursor:pointer; user-select:none;
+    font-family:var(--serif); font-size:16px; letter-spacing:.16em; font-weight:600;
+    border:1px solid var(--ink); color:var(--ink); background:transparent; align-self:flex-start;
+    transition:transform .08s, background .2s, color .2s, opacity .35s, border-color .2s;
+    opacity:0; pointer-events:none; transform:translateY(4px);
+    appearance:none; -webkit-appearance:none;
+  }
+  .btn.on { opacity:1; pointer-events:auto; transform:none; }
+  .btn:active { transform:scale(.97); }
+  .btn.primary { background:var(--ink); color:var(--paper); }
+  .btn.primary.ready { background:var(--dusk); border-color:var(--dusk); }
+  .btn.dusky { border-color:var(--dusk); color:var(--dusk); }
+  .btmrow { display:flex; justify-content:flex-end; padding-top:14px; flex:none; }
+  /* ── 场景：车窗（第 1/2 程夜车厢） ───────── */
+  .cwindow {
+    position:relative; flex:none; overflow:hidden; border:1px solid #d8d0c2;
+    background:linear-gradient(180deg, #10131a 0%, #171b24 60%, #1d222c 100%);
+  }
+  .cwindow .glowdot {
+    position:absolute; left:20%; top:30%; width:110px; height:110px; border-radius:50%;
+    background:radial-gradient(circle, rgba(255,214,140,.42) 0%, rgba(255,214,140,.12) 45%, transparent 70%);
+    filter:blur(2px); animation:breath 5s ease-in-out infinite; pointer-events:none;
+  }
+  @keyframes breath { 0%,100%{opacity:.7; transform:scale(1);} 50%{opacity:1; transform:scale(1.06);} }
+  .cwindow .mull { /* 窗框竖棂 */
+    position:absolute; top:0; bottom:0; width:5px; background:rgba(247,244,239,.85);
+  }
+  .cwindow .flash {
+    position:absolute; inset:0; background:rgba(255,238,196,.9); opacity:0; pointer-events:none;
+  }
+  .cwindow .flash.go { animation:blink .55s ease-in-out 3; }
+  @keyframes blink { 0%,100%{opacity:0;} 50%{opacity:.55;} }
+  .cwindow .tunnel {
+    position:absolute; inset:0; opacity:0; pointer-events:none;
+    background:repeating-linear-gradient(90deg, transparent 0 44px, rgba(255,214,140,.30) 44px 66px);
+  }
+  .cwindow .tunnel.run { animation:sweep 1.5s linear 4; opacity:1; }
+  @keyframes sweep { from{background-position-x:0;} to{background-position-x:-660px;} }
+  /* 剪影：TA 的背影（马尾 + 帆布包，无五官） */
+  .fig { position:absolute; bottom:0; left:50%; transform:translateX(-38%); }
+  .fig .body { width:60px; height:104px; background:#15161c; border-radius:24px 24px 10px 10px; position:relative; }
+  .fig .head { position:absolute; top:-28px; left:50%; transform:translateX(-50%); width:32px; height:32px; border-radius:50%; background:#15161c; transition:transform .6s ease; }
+  .fig .tail { position:absolute; top:-16px; left:64%; width:11px; height:42px; background:#15161c; border-radius:8px; transform:rotate(14deg); transition:transform .6s ease; }
+  .fig .bag { position:absolute; bottom:6px; left:-32px; width:28px; height:24px; background:#191a20; border-radius:4px 4px 8px 8px; }
+  .fig .strap { position:absolute; bottom:28px; left:-22px; width:9px; height:38px; border-left:3px solid #191a20; transform:rotate(8deg); }
+  .fig .book { position:absolute; bottom:-4px; left:50%; transform:translateX(-50%) rotate(-4deg); width:58px; height:40px; background:#FFFDF6; border:1px solid #cfc5b2; border-radius:2px; box-shadow:0 2px 6px rgba(0,0,0,.4); }
+  .fig .book i { position:absolute; left:8px; right:8px; height:1px; background:#b9ad99; }
+  .fig .book i:nth-child(1){ top:10px; } .fig .book i:nth-child(2){ top:19px; } .fig .book i:nth-child(3){ top:28px; right:20px; }
+  .fig .pen { position:absolute; bottom:2px; right:-14px; width:3px; height:30px; background:#191a20; border-radius:2px; transform:rotate(18deg); }
+  .fig.bowed .head { transform:translateX(-50%) translateY(5px) rotate(12deg); }
+  .fig.bowed .tail { transform:rotate(24deg); }
+  .fig.lookup .head { transform:translateX(-50%) translateY(-7px); }
+  .fig.lookup .tail { transform:rotate(-4deg); }
+  /* ── 第 1 程 · 车厢与座位 ───────────────── */
+  .cabin { position:relative; flex:1; display:flex; flex-direction:column; min-height:0; }
+  .warmveil, .breath, .dimveil {
+    position:absolute; inset:0; pointer-events:none; border-radius:12px;
+  }
+  .warmveil {
+    background:radial-gradient(ellipse at 50% 26%, rgba(255,206,120,.9), rgba(255,206,120,0) 62%);
+    opacity:0; transition:opacity .28s ease; z-index:3;
+  }
+  .warmveil.on { opacity:.15; }
+  .breath {
+    background:radial-gradient(ellipse at 50% 22%, rgba(255,206,120,.8), rgba(255,206,120,0) 60%);
+    opacity:0; z-index:2;
+  }
+  .cabin.sitting .breath { animation:lamp 4s ease-in-out infinite; }
+  @keyframes lamp { 0%,100%{opacity:.05;} 50%{opacity:.17;} }
+  .dimveil { background:#14120f; opacity:0; transition:opacity .8s ease; z-index:4; }
+  .dimveil.on { opacity:.32; }
+  .seatrow { display:flex; gap:8px; margin-top:20px; position:relative; z-index:5; }
+  .seat { flex:1; height:100px; position:relative; cursor:pointer; }
+  .seat .bk {
+    position:absolute; top:0; left:7%; right:7%; height:58%;
+    background:#ece5d6; border:1px solid #d5cbb8; border-radius:9px 9px 4px 4px;
+    box-shadow:0 2px 0 #ddd2bd; transition:transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+  }
+  .seat .bs { position:absolute; bottom:6px; left:3%; right:3%; height:26%; background:#f1ebde; border:1px solid #d5cbb8; border-radius:4px; }
+  .seat:hover .bk, .seat:active .bk { border-color:var(--dusk); transform:translateY(-2px); }
+  .seat .p { /* 已坐乘客 · 剪影背影（无五官） */
+    position:absolute; top:-30px; left:50%; transform:translateX(-50%);
+    width:34px; height:58px; background:#23211d; border-radius:13px 13px 6px 6px;
+  }
+  .seat .p::before { content:""; position:absolute; top:-22px; left:50%; transform:translateX(-50%); width:26px; height:26px; border-radius:50%; background:#23211d; }
+  .seat.occ { cursor:default; }
+  .seat.occ .bk, .seat.occ .bs { background:#e2dbca; }
+  .seat.chosen .p { background:#1a1916; }
+  .seat.chosen .p::before { background:#1a1916; }
+  .seat.chosen .bk { border-color:var(--dusk); }
+  .beats { margin-top:16px; min-height:132px; position:relative; z-index:5; }
+  .beats p {
+    font-family:var(--serif); font-size:17px; line-height:1.95; color:var(--ink);
+    opacity:0; transform:translateY(6px); transition:opacity .5s ease, transform .5s ease; margin-bottom:4px;
+  }
+  .beats p.on { opacity:1; transform:none; }
+  /* ── 第 2 程 · 长按对焦 ─────────────────── */
+  .scene2 {
+    position:relative; flex:none; height:250px; overflow:hidden;
+    border:1px solid #d8d0c2; transform-origin:50% 60%;
+    filter:blur(8px); transition:filter 2s linear, transform 2s linear;
+    background:linear-gradient(180deg, #10131a 0%, #171b24 60%, #1d222c 100%);
+    touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; cursor:pointer;
+  }
+  .cwindow.averted { filter:blur(6px); opacity:.62; transition:filter .55s ease, opacity .55s ease; }
+  .scene2.focused { filter:blur(0px); transform:scale(1.035); }
+  .scene2.averted { filter:blur(7px); transform:translateY(16px) scale(.985); opacity:.6; transition:all .5s ease; }
+  .sketch { /* 速写本线稿：车厢轮廓 + 窗外光斑（纯线稿，无人脸） */
+    position:absolute; right:8%; top:12%; width:200px; height:180px; background:#FFFDF6;
+    border:1px solid #cfc5b2; box-shadow:0 6px 18px rgba(0,0,0,.45); padding:10px; transform:rotate(2deg);
+  }
+  .sketch svg { display:block; width:100%; height:100%; }
+  .holdwrap { display:flex; align-items:center; gap:16px; margin-top:14px; flex:none; }
+  .holdbtn { position:relative; width:74px; height:74px; flex:none; cursor:pointer; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; touch-action:none; }
+  .holdbtn svg { position:absolute; inset:0; transform:rotate(-90deg); }
+  .holdbtn .core {
+    position:absolute; inset:9px; border-radius:50%; background:#FFFDF6; border:1px solid var(--hairline);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--serif); font-size:20px; font-weight:600; color:var(--dusk); letter-spacing:0;
+  }
+  .holdtxt { font-size:12.5px; letter-spacing:.14em; color:var(--ink-soft); line-height:1.9; }
+  .peekmsg { min-height:64px; margin-top:6px; flex:none; }
+  .peekmsg p { font-family:var(--serif); font-size:17px; line-height:1.95; color:var(--ink); opacity:0; transform:translateY(5px); transition:opacity .5s, transform .5s; }
+  .peekmsg p.on { opacity:1; transform:none; }
+  /* 三选 */
+  .opts { display:flex; flex-direction:column; gap:12px; margin-top:18px; flex:none; }
+  .opt {
+    border:1px solid var(--hairline); background:#FFFDF6; padding:15px 20px; cursor:pointer; user-select:none;
+    font-family:var(--serif); font-size:17px; letter-spacing:.1em; color:var(--ink);
+    transition:border-color .2s, transform .09s, background .2s;
+  }
+  .opt:hover { border-color:var(--dusk); }
+  .opt:active { transform:scale(.985); }
+  .opt.picked { border-color:var(--dusk); background:var(--dusk-wash); }
+  /* ── 字卡（沿用 B 版「同一版式两种体温」） ── */
+  .card {
+    position:absolute; inset:0; z-index:30; display:flex; flex-direction:column;
+    justify-content:center; padding:0 36px; text-align:left;
+    opacity:0; pointer-events:none; transform:translateY(10px);
+    transition:opacity .2s ease-out, transform .2s ease-out; overflow-y:auto;
+  }
+  .card.on { opacity:1; pointer-events:auto; transform:none; }
+  .card.paper { background:var(--paper); }
+  .card.rainy { background:linear-gradient(165deg, oklch(0.33 0.05 255), oklch(0.21 0.04 258)); color:var(--paper); }
+  .card.warmup { background:linear-gradient(165deg, oklch(0.42 0.06 255) 0%, oklch(0.52 0.07 70) 130%); color:var(--paper); }
+  .card .k { font-size:11px; letter-spacing:.32em; margin-bottom:20px; opacity:.65; }
+  .card h2 { font-family:var(--serif); font-weight:600; font-size:27px; line-height:1.62; margin-bottom:18px; text-wrap:balance; }
+  .card .sub { font-size:14.5px; line-height:2.05; opacity:.85; }
+  .card .rule { width:52px; height:2px; margin:24px 0; background:var(--dusk); }
+  .card.rainy .rule { background:rgba(247,244,239,.4); }
+  .card.warmup .rule { background:var(--warm); }
+  .card .next { font-family:var(--serif); font-size:15px; line-height:1.9; opacity:.78; }
+  .card .cta {
+    margin-top:26px; align-self:flex-start; padding:12px 24px; border:1px solid currentColor;
+    font-size:13.5px; letter-spacing:.2em; cursor:pointer; opacity:.92; user-select:none; transition:transform .09s;
+  }
+  .card .cta:active { transform:scale(.97); }
+  .card .hook { margin-top:34px; }
+  .card .hook h3 { font-family:var(--serif); font-size:21px; font-weight:600; letter-spacing:.06em; margin-bottom:8px; }
+  .card .hook p { font-size:12.5px; letter-spacing:.14em; opacity:.66; line-height:1.9; }
+  /* ── 第 3 程（整段继承 B-参照） ─────────── */
+  .ch3body { display:flex; flex-direction:column; flex:1; min-height:0; }
+  .window {
+    position:relative; height:200px; overflow:hidden; flex:none; border:1px solid #d8d0c2;
+    background:linear-gradient(160deg, oklch(0.30 0.05 255) 0%, oklch(0.22 0.04 258) 55%, oklch(0.17 0.03 260) 100%);
+  }
+  .window .glow {
+    position:absolute; right:14%; top:34%; width:120px; height:120px; border-radius:50%;
+    background:radial-gradient(circle, rgba(255,214,140,.5) 0%, rgba(255,214,140,.14) 45%, transparent 70%);
+    filter:blur(2px); animation:breath 5s ease-in-out infinite;
+  }
+  .rain, .rain.back { position:absolute; inset:-40% -10%; pointer-events:none; }
+  .rain { background:repeating-linear-gradient(78deg, transparent 0 11px, rgba(210,222,244,.16) 11px 12px); animation:fall 1.1s linear infinite; }
+  .rain.back { background:repeating-linear-gradient(74deg, transparent 0 17px, rgba(210,222,244,.09) 17px 18px); animation:fall 1.7s linear infinite; }
+  @keyframes fall { from{transform:translateY(-46px);} to{transform:translateY(46px);} }
+  .window .drop {
+    position:absolute; width:7px; height:11px; border-radius:50% 50% 55% 55%;
+    background:linear-gradient(rgba(235,242,255,.55), rgba(235,242,255,.18));
+    left:0; top:8%; animation:slide 9s ease-in infinite;
+  }
+  .window .drop.d2 { left:auto; right:24%; top:0; animation-duration:12.5s; animation-delay:3.4s; height:8px; width:5px; }
+  @keyframes slide {
+    0% { transform:translate(0,0); opacity:0; }
+    6% { opacity:.9; }
+    12% { transform:translate(-4px,38px); }
+    24% { transform:translate(3px,80px); }
+    40% { transform:translate(-5px,140px); opacity:.85; }
+    60% { transform:translate(2px,210px); }
+    82% { transform:translate(-4px,285px); opacity:.7; }
+    100% { transform:translate(0,318px); opacity:0; }
+  }
+  .window .ledge { position:absolute; bottom:0; left:0; right:0; height:12px; background:linear-gradient(rgba(247,244,239,.92), rgba(247,244,239,.98)); }
+  .window .fig { transform:translateX(-38%) scale(.92); transform-origin:bottom center; }
+  .journal { padding:8px 0 2px; flex:none; }
+  .journal p {
+    font-family:var(--serif); font-size:16.5px; line-height:1.85; font-weight:500;
+    color:var(--ink); margin-bottom:4px;
+    opacity:0; transform:translateY(7px); transition:opacity .55s ease, transform .55s ease;
+  }
+  .journal p.on { opacity:1; transform:none; }
+  .journal p em { font-style:normal; color:var(--dusk); }
+  .act { padding:6px 0 2px; flex:1; display:flex; flex-direction:column; min-height:0; }
+  #s3 { padding:16px 22px 18px; }
+  .note {
+    background:#FFFDF6; border:1px solid #e8e0d2; padding:12px 14px 8px;
+    box-shadow:0 3px 14px rgba(38,35,32,.07), 0 1px 3px rgba(38,35,32,.05);
+    transform:rotate(-.6deg); position:relative; flex:none;
+  }
+  .note::before {
+    content:""; position:absolute; top:-6px; left:0; right:0; height:6px;
+    background:repeating-linear-gradient(90deg, #FFFDF6 0 8px, #f3ecdd 8px 10px);
+  }
+  .note .slot {
+    min-height:36px; display:flex; flex-wrap:wrap; gap:5px; align-items:center;
+    border-bottom:1px dashed #cfc5b2; padding-bottom:7px; margin-bottom:9px;
+    font-family:var(--serif); font-size:18px; font-weight:600; letter-spacing:.08em; color:var(--dusk);
+  }
+  .note .slot .ph { color:#b9ad99; font-size:13.5px; font-family:var(--sans); letter-spacing:.14em; font-weight:400; }
+  .note .slot .chip {
+    background:var(--dusk-wash); color:var(--dusk); padding:1px 5px; font-size:17px; cursor:pointer;
+    border-bottom:2px solid var(--dusk); animation:chipin .18s ease;
+  }
+  @keyframes chipin { from{transform:scale(.7); opacity:0;} to{transform:scale(1); opacity:1;} }
+  .wordrows { display:flex; flex-direction:column; gap:7px; }
+  .wordrow { display:flex; gap:7px; }
+  .wordrow:nth-child(2) { padding-left:22px; }
+  .wordrow:nth-child(3) { padding-left:6px; }
+  .wordrow:nth-child(4) { padding-left:28px; }
+  .wordrow:nth-child(5) { padding-left:12px; }
+  .w {
+    width:50px; height:38px; background:#FFFDF6; border:1px solid #ddd3c0;
+    font-family:var(--serif); font-size:20px; font-weight:600; color:var(--ink);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    box-shadow:0 2px 0 #e6ddcb; transition:transform .09s ease, box-shadow .09s ease, opacity .25s;
+    user-select:none; -webkit-user-select:none;
+  }
+  .w:hover { border-color:var(--dusk); }
+  .w:active { transform:translateY(3px) scale(.94); box-shadow:0 0 0 #e6ddcb; }
+  .w.used { opacity:.18; pointer-events:none; box-shadow:none; }
+  .actions { display:flex; gap:12px; margin-top:8px; flex:none; }
+  .ask { flex:none; margin-top:6px; font-size:13px; letter-spacing:.14em; color:var(--ink-soft); text-align:center; line-height:1.6; }
+  .actions .btn { opacity:1; pointer-events:auto; transform:none; flex:1; align-self:auto; padding:11px 0; }
+  .actions .btn[disabled] { opacity:.3; pointer-events:none; }
+  .actions .btn.faded { opacity:0; pointer-events:none; }
+  /* 站台（第 1 程开场） */
+  .platform { position:relative; flex:none; height:170px; overflow:hidden; border:1px solid #d8d0c2; background:linear-gradient(180deg, #14161c 0%, #1b1e26 100%); }
+  .platform .train { position:absolute; left:-6%; right:-6%; top:24px; height:86px; background:#1d2029; border:1px solid #2a2e3a; border-radius:8px; }
+  .platform .train i { position:absolute; top:16px; width:52px; height:40px; background:linear-gradient(180deg, rgba(255,214,140,.5), rgba(255,214,140,.16)); border-radius:3px; }
+  .platform .train i:nth-child(1){ left:8%; } .platform .train i:nth-child(2){ left:30%; }
+  .platform .train i:nth-child(3){ left:52%; animation:breath 3.6s ease-in-out infinite; }
+  .platform .train i:nth-child(4){ left:74%; }
+  .platform .edge { position:absolute; left:0; right:0; bottom:22px; height:4px; background:repeating-linear-gradient(90deg, #e8e0d0 0 26px, transparent 26px 40px); opacity:.7; }
+  .platform .name { position:absolute; right:12px; bottom:34px; font-size:10px; letter-spacing:.3em; color:rgba(247,244,239,.4); }
+  @media (max-width:480px){
+    body{ padding:0; }
+    .bezel{ border-radius:0; box-shadow:none; height:100vh; max-height:none; min-height:100vh; }
+  }
+</style>
+</head>
+<body>
+<div class="bezel">
+
+  <div class="top">
+    <span class="ch">第 <b id="topN">1</b> 程 · <span id="topT">23:47</span></span>
+    <span class="r">
+      <span class="meta" id="topM">站台</span>
+      <button id="audioBtn" aria-label="声音开关">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 9.5v5h3.4L12 18.6V5.4L7.4 9.5H4z" fill="currentColor" stroke="none"/>
+          <path class="wv" d="M15.2 9.6c1.15 1.35 1.15 3.45 0 4.8"/>
+          <path class="wv" d="M17.6 7.6c2.05 2.45 2.05 6.35 0 8.8"/>
+          <line class="ml" x1="4.5" y1="19.5" x2="19.5" y2="4.5"/>
+        </svg>
+      </button>
+    </span>
+  </div>
+
+  <div class="canvas">
+
+    <!-- ══ 第 1 程 · 23:47 ══ -->
+    <section class="stage" id="s1a">
+      <div class="kicker">第 1 程 · 末班车</div>
+      <div class="bignum">23:47<small>末班</small></div>
+      <div class="platform">
+        <div class="train"><i></i><i></i><i></i><i></i></div>
+        <div class="edge"></div>
+        <div class="name">LINE 7 · NIGHT</div>
+      </div>
+      <div class="tw" id="tw1a"></div>
+      <div class="btmrow"><span class="btn primary" id="b1a">走进车厢 →</span></div>
+    </section>
+
+    <section class="stage" id="s1b">
+      <div class="hint"><span id="hint1">教学 · 选择今晚坐哪</span><span>6 个座位 · 2 人已坐</span></div>
+      <div class="cabin" id="cabin">
+        <div class="cwindow" style="height:172px;">
+          <div class="glowdot" style="left:62%; top:26%;"></div>
+          <div class="mull" style="left:33%;"></div>
+          <div class="mull" style="left:66%;"></div>
+          <div class="flash" id="flash1"></div>
+          <div class="tunnel" id="tunnel1"></div>
+        </div>
+        <div class="seatrow" id="seatrow"></div>
+        <div class="beats" id="beats1"></div>
+        <div class="warmveil" id="veil1"></div>
+        <div class="breath"></div>
+        <div class="dimveil" id="dim1"></div>
+      </div>
+      <div class="btmrow"><span class="btn primary" id="b1b">第 1 程完 →</span></div>
+    </section>
+
+    <section class="stage card paper" id="c1">
+      <div class="k">第 1 程完</div>
+      <h2>明晚，同一个人<br>又出现在同一节车厢。</h2>
+      <div class="rule"></div>
+      <p class="next">你在站台上认出了那支笔。<br>车来了。还是 23:47。</p>
+      <span class="cta" id="b1c">第 2 程 · 速写本 →</span>
+    </section>
+
+    <!-- ══ 第 2 程 · 速写本 ══ -->
+    <section class="stage" id="s2a">
+      <div class="kicker">第 2 程 · 速写本</div>
+      <div class="cwindow" style="height:216px;">
+        <div class="glowdot" style="left:58%; top:22%;"></div>
+        <div class="mull" style="left:30%;"></div>
+        <div class="mull" style="left:70%;"></div>
+        <div class="fig bowed">
+          <div class="body"><div class="head"></div><div class="tail"></div><div class="bag"></div><div class="strap"></div><div class="book"><i></i><i></i><i></i></div><div class="pen"></div></div>
+        </div>
+      </div>
+      <div class="tw" id="tw2a"></div>
+      <div class="btmrow"><span class="btn primary" id="b2a">坐回老位置 →</span></div>
+    </section>
+
+    <section class="stage" id="s2b">
+      <div class="hint"><span>互动 · 长按，把视线对上焦</span><span id="holdState">松手太早就看不清</span></div>
+      <div class="scene2" id="scene2" data-testid="scene2">
+        <div class="glowdot" style="left:12%; top:18%; width:90px; height:90px;"></div>
+        <div class="fig bowed" style="left:34%;">
+          <div class="body"><div class="head"></div><div class="tail"></div><div class="bag"></div><div class="strap"></div><div class="book"><i></i><i></i><i></i></div><div class="pen"></div></div>
+        </div>
+        <div class="sketch">
+          <svg viewBox="0 0 180 160" fill="none" stroke="#4a4438" stroke-width="1.6" stroke-linecap="round">
+            <rect x="10" y="34" width="160" height="86" rx="10"/>
+            <line x1="10" y1="60" x2="170" y2="60"/>
+            <rect x="22" y="68" width="34" height="34" rx="3"/>
+            <rect x="72" y="68" width="34" height="34" rx="3"/>
+            <rect x="122" y="68" width="34" height="34" rx="3"/>
+            <circle cx="39" cy="85" r="7" stroke="#8a6a3a"/>
+            <circle cx="89" cy="85" r="5" stroke="#8a6a3a"/>
+            <line x1="30" y1="132" x2="60" y2="132"/>
+            <line x1="24" y1="140" x2="44" y2="140"/>
+            <line x1="120" y1="136" x2="150" y2="136"/>
+          </svg>
+        </div>
+      </div>
+      <div class="holdwrap">
+        <div class="holdbtn" id="holdBtn">
+          <svg viewBox="0 0 74 74">
+            <circle cx="37" cy="37" r="33" fill="none" stroke="#e4dccd" stroke-width="3"/>
+            <circle id="rfg" cx="37" cy="37" r="33" fill="none" stroke="var(--dusk)" stroke-width="3"
+              stroke-linecap="round" stroke-dasharray="207.3" stroke-dashoffset="207.3"/>
+          </svg>
+          <span class="core">看</span>
+        </div>
+        <div class="holdtxt">按住不放，视线慢慢对焦——<br>长按 2 秒，看清 TA 的速写本</div>
+      </div>
+      <div class="peekmsg" id="peekMsg"></div>
+      <div class="btmrow"><span class="btn primary" id="b2b">就在这时 →</span></div>
+    </section>
+
+    <section class="stage" id="s2c">
+      <div class="hint"><span>车厢 · 同一节</span><span>23:47 过了一半</span></div>
+      <div class="cwindow" style="height:216px;" id="cw2">
+        <div class="glowdot" style="left:58%; top:22%;"></div>
+        <div class="mull" style="left:30%;"></div>
+        <div class="mull" style="left:70%;"></div>
+        <div class="fig" id="fig2">
+          <div class="body"><div class="head"></div><div class="tail"></div><div class="bag"></div><div class="strap"></div><div class="book"><i></i><i></i><i></i></div><div class="pen"></div></div>
+        </div>
+      </div>
+      <div class="tw" id="tw2c"></div>
+      <div class="btmrow"><span class="btn primary" id="b2c">此刻，你会——</span></div>
+    </section>
+
+    <section class="stage" id="s2d">
+      <div class="kicker">微表情 · 三选</div>
+      <div class="tw" id="tw2d"></div>
+      <div class="opts" id="opts">
+        <span class="opt" data-x="smile">露出一点笑意</span>
+        <span class="opt" data-x="pretend">假装没看见</span>
+        <span class="opt" data-x="listen">低头继续听歌</span>
+      </div>
+    </section>
+
+    <section class="stage card paper" id="c2">
+      <div class="k">第 2 程完</div>
+      <h2 id="c2h2">你露出了一点笑意。</h2>
+      <div class="rule"></div>
+      <p class="next">车窗外，云低了下来。<br>下一程，是雨夜。</p>
+      <span class="cta" id="b2d">第 3 程 · 一站路的勇气 →</span>
+    </section>
+
+    <!-- ══ 第 3 程 · 一站路的勇气（继承 B 版） ══ -->
+    <section class="stage" id="s3">
+      <div class="ch3body">
+        <div class="window">
+          <div class="rain back"></div>
+          <div class="glow"></div>
+          <div class="rain"></div>
+          <div class="drop"></div>
+          <div class="drop d2"></div>
+          <div class="fig">
+            <div class="body"><div class="head"></div><div class="tail"></div><div class="bag"></div><div class="strap"></div></div>
+          </div>
+          <div class="ledge"></div>
+        </div>
+        <div class="journal" id="journal"></div>
+        <div class="act">
+          <div class="hint" style="margin-bottom:8px;"><span id="hint3">从字块中拼出一句话 · 点已选的字可撤回</span><span id="count3">0 字</span></div>
+          <div class="note">
+            <div class="slot" id="slot3"><span class="ph">便签上写着——</span></div>
+            <div class="wordrows" id="rows3"></div>
+          </div>
+          <div class="actions" id="actWrite">
+            <button class="btn primary" id="btnDone" disabled>写 好 了</button>
+          </div>
+          <div class="ask" id="ask3" style="display:none">贴在 TA 会经过的车窗上？</div>
+          <div class="actions" id="actDecide" style="display:none">
+            <span class="btn primary" id="btnStick">贴上去</span>
+            <span class="btn" id="btnKeep">收回来</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="stage card warmup" id="c3s">
+      <div class="k">第 3 程完 · 贴上</div>
+      <h2>TA 在下车前看到了便签，<br>抬头，望向你的方向。</h2>
+      <p class="sub">你不知道 TA 看没看清。<br>窗外，雨停了。</p>
+      <div class="rule"></div>
+      <p class="next">第 4 程，雨后的城市。<br>TA 的速写本，翻开着。</p>
+      <span class="cta" id="b3s">继续 →</span>
+    </section>
+
+    <section class="stage card rainy" id="c3k">
+      <div class="k">第 3 程完 · 收回</div>
+      <h2>便签留在了包里。<br>到站，TA 擦肩而过。</h2>
+      <p class="sub">帆布包上的挂饰，晃了一下。</p>
+      <div class="rule"></div>
+      <p class="next">有些话错过了今晚，还有明晚。<br>末班车每天 23:47，都会来。</p>
+      <span class="cta" id="b3k">继续 →</span>
+    </section>
+
+    <!-- ══ 演示结束卡（两分支文案不同） ══ -->
+    <section class="stage card warmup" id="eS">
+      <div class="k">演示结束 · 贴上去的分支</div>
+      <h2>完整版中，第 4–14 程将<br>沿着这趟车继续——</h2>
+      <p class="sub">雨停之后的城市，翻开的速写本，<br>和一整个季节的末班车。</p>
+      <div class="rule"></div>
+      <div class="hook">
+        <h3>想要完整版吗？</h3>
+        <p>《末班车的心动》· 共 14 程 · 每晚 23:47 发车</p>
+      </div>
+      <span class="cta" id="reS">再坐一次 →</span>
+    </section>
+
+    <section class="stage card rainy" id="eK">
+      <div class="k">演示结束 · 收回来的分支</div>
+      <h2>完整版中，第 4–14 程将<br>慢慢回答那句话——</h2>
+      <p class="sub">没贴出去的话，还有机会说出口。<br>勇气会一程一程地长出来。</p>
+      <div class="rule"></div>
+      <div class="hook">
+        <h3>想要完整版吗？</h3>
+        <p>《末班车的心动》· 共 14 程 · 每晚 23:47 发车</p>
+      </div>
+      <span class="cta" id="reK">再坐一次 →</span>
+    </section>
+
+  </div><!-- /canvas -->
+</div><!-- /bezel -->
+
+<script>
+(function () {
+  'use strict';
+  /* ── 状态 ─────────────────────────────── */
+  var S = { ch: 1, expr: null, branch: null, seated: false, holdDone: false };
+  var $ = function (id) { return document.getElementById(id); };
+  function store(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
+  function read(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+
+  /* ── 舞台切换：crossfade + 上移 200ms ── */
+  function show(id) {
+    var cur = document.querySelectorAll('.stage.on');
+    for (var i = 0; i < cur.length; i++) {
+      cur[i].classList.remove('on'); cur[i].classList.add('leaving');
+      requestAnimationFrame(function () { this.classList.add('fade'); }.bind(cur[i]));
+    }
+    setTimeout(function () {
+      var ls = document.querySelectorAll('.stage.leaving');
+      for (var j = 0; j < ls.length; j++) ls[j].classList.remove('leaving');
+    }, 240);
+    var t = $(id);
+    t.classList.remove('leaving', 'fade');
+    t.classList.add('on');
+    t.scrollTop = 0;
+  }
+  function topbar() {
+    $('topN').textContent = S.ch;
+    $('topT').textContent = '23:47';
+    $('topM').textContent = S.ch === 1 ? (S.seated ? '车厢 · 隧道' : '站台') : S.ch === 2 ? '同一节车厢' : '雨夜';
+  }
+  function setCh(n) { S.ch = n; store('rg-ch', n); topbar(); AU.sync(); }
+
+  /* ── 打字机（逐字淡入 · 点击跳过整段） ── */
+  function typeInto(container, lines, done) {
+    container.innerHTML = '';
+    var ps = lines.map(function (t) {
+      var p = document.createElement('p');
+      container.appendChild(p); return p;
+    });
+    var li = 0, ci = 0, fin = false, timer = null;
+    function finish() {
+      if (fin) return; fin = true; clearTimeout(timer);
+      ps.forEach(function (p, i) { p.textContent = lines[i]; p.classList.add('on'); });
+      if (done) done();
+    }
+    container.onclick = finish;
+    function step() {
+      if (fin) return;
+      if (li >= lines.length) { finish(); return; }
+      ci++;
+      ps[li].textContent = lines[li].slice(0, ci);
+      ps[li].classList.add('on');
+      if (ci >= lines[li].length) { li++; ci = 0; timer = setTimeout(step, 300); }
+      else timer = setTimeout(step, 46);
+    }
+    step();
+    return { finish: finish };
+  }
+  function beat(parent, text, delay) {
+    setTimeout(function () {
+      var p = document.createElement('p');
+      p.textContent = text; parent.appendChild(p);
+      requestAnimationFrame(function () { p.classList.add('on'); });
+    }, delay);
+  }
+
+  /* ── 音频：Web Audio 程序化合成，零文件 ── */
+  var AU = {
+    ac: null, master: null, on: true, inited: false,
+    rainG: null, pianoOn: false, trackOn: true, step: 0,
+    PATTERN: [220.0, 261.63, 329.63, 440.0, 329.63, 261.63, 220.0, 164.81], // A 小调琶音
+    init: function () {
+      if (this.inited) return; this.inited = true;
+      try {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        this.ac = new AC();
+        this.master = this.ac.createGain();
+        this.master.gain.value = this.on ? 0.9 : 0;
+        this.master.connect(this.ac.destination);
+        if (this.ac.state === 'suspended') this.ac.resume();
+        // 雨声白噪（第 3 程起，常备节点，用增益开关）
+        var len = this.ac.sampleRate * 2;
+        var buf = this.ac.createBuffer(1, len, this.ac.sampleRate);
+        var d = buf.getChannelData(0);
+        for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+        var src = this.ac.createBufferSource(); src.buffer = buf; src.loop = true;
+        var lp = this.ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 850;
+        this.rainG = this.ac.createGain(); this.rainG.gain.value = 0;
+        src.connect(lp); lp.connect(this.rainG); this.rainG.connect(this.master); src.start();
+      } catch (e) {}
+      var self = this;
+      // 轨道低频节奏（轻）
+      setInterval(function () {
+        if (!self.ac || !self.trackOn || !self.on) return;
+        self.step++;
+        self.tone(56, .11, .028, 'sine');
+        if (self.step % 2 === 0) setTimeout(function () { self.tone(48, .09, .016, 'sine'); }, 250);
+        // piano 琶音（第 2 程起）
+        if (self.pianoOn && self.step % 2 === 1) {
+          var n = self.PATTERN[(self.step >> 1) % self.PATTERN.length];
+          self.tone(n, 1.5, .032, 'sine', .015);
+        }
+      }, 540);
+      this.sync();
+    },
+    tone: function (f, dur, vol, type, delay) {
+      if (!this.ac || !this.on) return;
+      try {
+        var t = this.ac.currentTime + (delay || 0);
+        var o = this.ac.createOscillator(), g = this.ac.createGain();
+        o.type = type || 'sine'; o.frequency.value = f;
+        g.gain.setValueAtTime(.0001, t);
+        g.gain.exponentialRampToValueAtTime(vol, t + .014);
+        g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+        o.connect(g); g.connect(this.master);
+        o.start(t); o.stop(t + dur + .05);
+      } catch (e) {}
+    },
+    wood: function () { this.tone(720, .09, .05, 'triangle'); this.tone(590, .12, .03, 'sine', .015); },
+    drop: function () { // 柔和水滴：上滑啁啾
+      if (!this.ac || !this.on) return;
+      try {
+        var t = this.ac.currentTime;
+        var o = this.ac.createOscillator(), g = this.ac.createGain();
+        o.type = 'sine'; o.frequency.setValueAtTime(420, t);
+        o.frequency.exponentialRampToValueAtTime(940, t + .16);
+        g.gain.setValueAtTime(.0001, t);
+        g.gain.exponentialRampToValueAtTime(.06, t + .02);
+        g.gain.exponentialRampToValueAtTime(.0001, t + .34);
+        o.connect(g); g.connect(this.master); o.start(t); o.stop(t + .4);
+      } catch (e) {}
+    },
+    bell: function () { // 对视轻钟
+      this.tone(1318.5, 1.7, .035, 'sine');
+      this.tone(1975.5, 1.2, .014, 'sine', .01);
+    },
+    sync: function () {
+      this.pianoOn = S.ch >= 2;
+      this.trackOn = true;
+      if (this.rainG && this.ac) {
+        var v = S.ch >= 3 ? .03 : 0, t = this.ac.currentTime;
+        try { this.rainG.gain.setTargetAtTime(v, t, .8); } catch (e) {}
+      }
+    },
+    toggle: function () {
+      this.on = !this.on;
+      try { localStorage.setItem('rg-audio', this.on ? 'on' : 'off'); } catch (e) {}
+      if (this.master && this.ac) {
+        try { this.master.gain.setTargetAtTime(this.on ? 0.9 : 0, this.ac.currentTime, .05); } catch (e) {}
+      }
+      $('audioBtn').classList.toggle('off', !this.on);
+    }
+  };
+  try { if (localStorage.getItem('rg-audio') === 'off') { AU.on = false; $('audioBtn').classList.add('off'); } } catch (e) {}
+  document.addEventListener('pointerdown', function () { AU.init(); }, { once: false });
+  $('audioBtn').addEventListener('click', function (e) { e.stopPropagation(); AU.init(); AU.toggle(); });
+  document.addEventListener('contextmenu', function (e) { if (e.target.closest && e.target.closest('.holdbtn,.scene2')) e.preventDefault(); });
+
+  /* ══ 第 1 程 ═══════════════════════════ */
+  function ch1() {
+    setCh(1); S.seated = false;
+    show('s1a');
+    typeInto($('tw1a'), [
+      '加班到深夜的城市，23:47 的末班车。',
+      '你拖着一天剩下的一半，走进车厢。'
+    ], function () { $('b1a').classList.add('on'); });
+  }
+  $('b1a').addEventListener('click', function () {
+    AU.tone(480, .09, .03, 'sine');
+    show('s1b'); topbar();
+    buildSeats();
+  });
+
+  var SEATS = [{ occ: false }, { occ: true }, { occ: false }, { occ: false }, { occ: true }, { occ: false }];
+  function buildSeats() {
+    var row = $('seatrow'); row.innerHTML = '';
+    SEATS.forEach(function (s, i) {
+      var el = document.createElement('div');
+      el.className = 'seat' + (s.occ ? ' occ' : '');
+      el.innerHTML = '<div class="bk"></div><div class="bs"></div>' + (s.occ ? '<div class="p"></div>' : '');
+      if (!s.occ) {
+        el.addEventListener('pointerenter', function () { if (!S.seated) $('veil1').classList.add('on'); });
+        el.addEventListener('pointerleave', function () { $('veil1').classList.remove('on'); });
+        el.addEventListener('pointerdown', function () { if (!S.seated) $('veil1').classList.add('on'); });
+        el.addEventListener('click', function () { sit(el); });
+      }
+      row.appendChild(el);
+    });
+  }
+  function sit(seat) {
+    if (S.seated) return;
+    S.seated = true;
+    seat.classList.add('chosen');
+    var p = document.createElement('div'); p.className = 'p'; seat.appendChild(p);
+    $('veil1').classList.remove('on');
+    $('hint1').textContent = '你坐下了 · 车厢的灯，呼吸着';
+    $('cabin').classList.add('sitting');
+    $('dim1').classList.add('on');
+    var beats = $('beats1');
+    beats.innerHTML = '';
+    var line = document.createElement('p');
+    line.textContent = '你坐下，闭眼。耳机里放着一首没有名字的歌。';
+    beats.appendChild(line);
+    requestAnimationFrame(function () { line.classList.add('on'); });
+    s1Timers.length = 0; s1Done = false; s1Skipped = false; s1Armed = false;
+    s1Timers.push(setTimeout(function () { $('flash1').classList.add('go'); beat(beats, '到站的灯，闪了两下。', 0); }, 2300));
+    s1Timers.push(setTimeout(function () { $('tunnel1').classList.add('run'); beat(beats, '隧道。灯一节节掠过。', 0); }, 3600));
+    s1Timers.push(setTimeout(function () { beat(beats, '到站。有人下车。', 0); }, 9300));
+    s1Timers.push(setTimeout(function () { $('b1b').classList.add('on'); s1Done = true; }, 10400));
+    setTimeout(function () { s1Armed = true; }, 0); // 避开选中座位的那次 click 冒泡
+    topbar();
+  }
+  /* 点击车厢可快进坐下后的过场（评审 💡1：灯闪→隧道→到站，一键到按钮） */
+  var s1Timers = [], s1Done = false, s1Skipped = false, s1Armed = false;
+  $('cabin').addEventListener('click', function () {
+    if (!S.seated || !s1Armed || s1Done || s1Skipped) return;
+    s1Skipped = true;
+    for (var k = 0; k < s1Timers.length; k++) clearTimeout(s1Timers[k]);
+    $('flash1').classList.add('go');
+    $('tunnel1').classList.add('run');
+    var beats = $('beats1');
+    var seen = {};
+    beats.querySelectorAll('p').forEach(function (p) { seen[p.textContent] = 1; });
+    ['到站的灯，闪了两下。', '隧道。灯一节节掠过。', '到站。有人下车。'].forEach(function (t) {
+      if (!seen[t]) { var p = document.createElement('p'); p.textContent = t; beats.appendChild(p); }
+    });
+    beats.querySelectorAll('p').forEach(function (p) { p.classList.add('on'); });
+    $('b1b').classList.add('on');
+    s1Done = true;
+  });
+  $('b1b').addEventListener('click', function () { show('c1'); });
+  $('b1c').addEventListener('click', function () { ch2(); });
+
+  /* ══ 第 2 程 ═══════════════════════════ */
+  var EXPR = {
+    smile:   { label: '露出一点笑意', card: '你露出了这一点点笑意。', open: '你嘴角的笑意，还没来得及收回去。' },
+    pretend: { label: '假装没看见',   card: '你假装没看见，目光落回报站屏。', open: '你假装没看见，目光落在报站屏上。' },
+    listen:  { label: '低头继续听歌', card: '你低下头，继续听歌。', open: '你低下头，让歌停在最安静的那一首。' }
+  };
+  function ch2() {
+    setCh(2); S.holdDone = false;
+    show('s2a');
+    typeInto($('tw2a'), [
+      '你又看见 TA 了。',
+      '还是那个位置，还是那支笔。角落里，马尾，帆布包，低着头画着什么。'
+    ], function () { $('b2a').classList.add('on'); });
+  }
+  $('b2a').addEventListener('click', function () {
+    AU.tone(480, .09, .03, 'sine');
+    show('s2b'); resetHold();
+  });
+
+  /* 长按偷看：进度环 + blur 8→0 对焦 */
+  var RING_LEN = 207.3, HOLD_MS = 2000;
+  var holding = false, holdT0 = 0, rafId = null, earlyShown = false;
+  function setRing(p) { $('rfg').setAttribute('stroke-dashoffset', String(RING_LEN * (1 - p))); }
+  function resetHold() {
+    holding = false; setRing(0);
+    var sc = $('scene2');
+    sc.classList.remove('focused', 'averted');
+    sc.style.transitionDuration = '';
+    sc.style.filter = ''; sc.style.transform = '';
+    $('peekMsg').innerHTML = '';
+    $('holdState').textContent = '松手太早就看不清';
+    $('b2b').classList.remove('on');
+  }
+  function holdStart(e) {
+    if (S.holdDone || holding) return;
+    e.preventDefault();
+    holding = true; holdT0 = performance.now();
+    var sc = $('scene2');
+    sc.style.transitionDuration = HOLD_MS + 'ms';
+    sc.classList.add('focused');
+    $('holdState').textContent = '正在对焦……';
+    (function loop() {
+      if (!holding) return;
+      var p = Math.min(1, (performance.now() - holdT0) / HOLD_MS);
+      setRing(p);
+      if (p >= 1) { holdEnd(true); return; }
+      rafId = requestAnimationFrame(loop);
+    })();
+  }
+  function holdEnd(natural) {
+    if (!holding) return;
+    holding = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    var sc = $('scene2');
+    if (natural || (performance.now() - holdT0) >= HOLD_MS) {
+      S.holdDone = true;
+      setRing(1);
+      AU.drop();
+      $('holdState').textContent = '看清了';
+      $('peekMsg').innerHTML = '';
+      var p = document.createElement('p');
+      p.textContent = '画的是这节车厢。窗外的那盏灯，好像也是你看向窗外的角度。';
+      $('peekMsg').appendChild(p);
+      requestAnimationFrame(function () { p.classList.add('on'); });
+      $('b2b').classList.add('on');
+    } else {
+      // 松手过早：缓慢回焦（不敢看太久）
+      sc.style.transitionDuration = '900ms';
+      sc.classList.remove('focused');
+      setRing(0);
+      $('holdState').textContent = '没看清 · 可以再试一次';
+      if (!earlyShown) {
+        earlyShown = true;
+        var p2 = document.createElement('p');
+        p2.textContent = '不敢看太久。';
+        $('peekMsg').appendChild(p2);
+        requestAnimationFrame(function () { p2.classList.add('on'); });
+      }
+    }
+  }
+  $('holdBtn').addEventListener('pointerdown', holdStart);
+  $('scene2').addEventListener('pointerdown', holdStart);
+  document.addEventListener('pointerup', function () { if (holding) holdEnd(false); });
+  document.addEventListener('pointercancel', function () { if (holding) holdEnd(false); });
+  $('b2b').addEventListener('click', function () {
+    show('s2c');
+    typeInto($('tw2c'), ['你把速写本的画面记进了心里。'], function () {
+      setTimeout(function () {
+        $('fig2').classList.add('lookup');
+        beat($('tw2c'), 'TA 抬起了头——', 100);
+        setTimeout(function () {
+          $('cw2').classList.add('averted');
+          beat($('tw2c'), '你提前移开了视线。', 60);
+          beat($('tw2c'), '心脏漏了一拍。其实 TA 看的只是窗外。', 900);
+          setTimeout(function () { $('b2c').classList.add('on'); }, 2100);
+        }, 700);
+      }, 700);
+    });
+  });
+  $('b2c').addEventListener('click', function () {
+    show('s2d');
+    typeInto($('tw2d'), ['此刻，你会——']);
+  });
+  var optEls = document.querySelectorAll('.opt');
+  for (var oi = 0; oi < optEls.length; oi++) {
+    optEls[oi].addEventListener('click', function () {
+      // 允许重选：刷新回到本程时 rg-expr 可能已被恢复，早退会吞掉点击造成死锁（评审 ⚠️1）
+      S.expr = this.getAttribute('data-x');
+      store('rg-expr', S.expr);
+      var allOpts = document.querySelectorAll('.opt');
+      for (var k = 0; k < allOpts.length; k++) allOpts[k].classList.remove('picked');
+      this.classList.add('picked');
+      AU.tone(520, .12, .035, 'sine');
+      setTimeout(function () {
+        $('c2h2').textContent = EXPR[S.expr].card;
+        show('c2');
+      }, 350);
+    });
+  }
+  $('b2d').addEventListener('click', function () { ch3(); });
+
+  /* ══ 第 3 程（继承 B-参照） ════════════ */
+  var WORDS = ['你', '画', '的', '是', '这', '节', '车', '厢', '吗'];
+  var picked = [];
+  function buildWords() {
+    var rows = $('rows3'); rows.innerHTML = '';
+    for (var i = 0; i < WORDS.length; i += 2) {
+      var r = document.createElement('div'); r.className = 'wordrow';
+      WORDS.slice(i, i + 2).forEach(function (w) {
+        var el = document.createElement('span');
+        el.className = 'w'; el.textContent = w; el.dataset.w = w;
+        el.addEventListener('click', function () { pick(el, w); });
+        r.appendChild(el);
+      });
+      rows.appendChild(r);
+    }
+  }
+  function pick(el, w) {
+    if (picked.length >= 12) return;
+    picked.push(w); el.classList.add('used');
+    AU.wood();
+    render3();
+  }
+  function render3() {
+    var slot = $('slot3'); slot.innerHTML = '';
+    if (!picked.length) {
+      var ph = document.createElement('span'); ph.className = 'ph';
+      ph.textContent = '便签上写着——'; slot.appendChild(ph);
+    }
+    picked.forEach(function (w, i) {
+      var c = document.createElement('span'); c.className = 'chip'; c.textContent = w;
+      c.addEventListener('click', function () {
+        var cells = $('rows3').querySelectorAll('.w.used');
+        for (var k = 0; k < cells.length; k++) {
+          if (cells[k].dataset.w === w) { cells[k].classList.remove('used'); break; }
+        }
+        picked.splice(i, 1); AU.tone(420, .08, .028, 'sine'); render3();
+      });
+      slot.appendChild(c);
+    });
+    $('btnDone').disabled = picked.length < 2;
+    $('count3').textContent = picked.length + ' 字';
+  }
+  function ch3() {
+    setCh(3); picked = [];
+    buildWords(); render3();
+    $('slot3').style.pointerEvents = '';
+    $('actWrite').style.display = 'flex';
+    $('actDecide').style.display = 'none';
+    $('ask3').style.display = 'none';
+    $('rows3').style.pointerEvents = ''; $('rows3').style.opacity = '';
+    $('hint3').textContent = '从字块中拼出一句话 · 点已选的字可撤回';
+    $('count3').textContent = '0 字';
+    show('s3');
+    var j = $('journal'); j.innerHTML = '';
+    var lines = [];
+    if (EXPR[S.expr]) lines.push(EXPR[S.expr].open);
+    lines.push('雨夜。车窗上有水痕。');
+    lines.push('TA 的位置，离你<em>比往常近了一排</em>。');
+    lines.push('包里有便签，和一支笔。');
+    lines.forEach(function (t, i) {
+      var p = document.createElement('p'); p.innerHTML = t; j.appendChild(p);
+      setTimeout(function () { p.classList.add('on'); }, 500 + i * 750);
+    });
+  }
+  $('btnDone').addEventListener('click', function () {
+    if (picked.length < 2) return;
+    AU.tone(860, .14, .04, 'sine');
+    $('actWrite').style.display = 'none';
+    $('rows3').style.pointerEvents = 'none'; $('rows3').style.opacity = '.45';
+    $('hint3').textContent = '便签写好了 · 「' + picked.join('') + '」';
+    $('count3').textContent = '';
+    $('slot3').style.pointerEvents = 'none';
+    $('actWrite').style.display = 'none';
+    $('ask3').style.display = 'block';
+    $('actDecide').style.display = 'flex';
+  });
+  $('btnStick').addEventListener('click', function () {
+    S.branch = 'stick'; AU.bell(); show('c3s');
+  });
+  $('btnKeep').addEventListener('click', function () {
+    S.branch = 'keep'; AU.tone(320, .16, .035, 'sine'); show('c3k');
+  });
+  $('b3s').addEventListener('click', function () { show('eS'); });
+  $('b3k').addEventListener('click', function () { show('eK'); });
+  function restart() {
+    try { sessionStorage.removeItem('rg-ch'); sessionStorage.removeItem('rg-expr'); } catch (e) {}
+    location.reload();
+  }
+  $('reS').addEventListener('click', restart);
+  $('reK').addEventListener('click', restart);
+
+  /* ── 启动：刷新回当前程开头（sessionStorage） ── */
+  var startCh = parseInt(read('rg-ch') || '1', 10);
+  if (!(startCh >= 1 && startCh <= 3)) startCh = 1;
+  var savedExpr = read('rg-expr');
+  if (savedExpr && EXPR[savedExpr]) S.expr = savedExpr;
+  topbar();
+  if (startCh === 2) ch2();
+  else if (startCh === 3) ch3();
+  else ch1();
+
+  /* 评审捷径：#c2 / #c3 / #stick / #keep */
+  var h = location.hash.slice(1);
+  if (h === 'c2') { ch2(); }
+  else if (h === 'c3' || h === 'stick' || h === 'keep') {
+    ch3();
+    var ps3 = document.querySelectorAll('#journal p');
+    ps3.forEach(function (p) { p.classList.add('on'); });
+    if (h !== 'c3') {
+      picked = WORDS.slice();
+      picked.forEach(function (w) {
+        var cells = $('rows3').querySelectorAll('.w');
+        for (var k = 0; k < cells.length; k++) {
+          if (cells[k].dataset.w === w && !cells[k].classList.contains('used')) { cells[k].classList.add('used'); break; }
+        }
+      });
+      render3(); $('btnDone').disabled = false;
+      $('actWrite').style.display = 'none';
+      $('rows3').style.pointerEvents = 'none'; $('rows3').style.opacity = '.45';
+      $('hint3').textContent = '便签写好了 · 「你画的是这节车厢吗」'; $('count3').textContent = '';
+      $('ask3').style.display = 'block';
+      $('actDecide').style.display = 'flex';
+      if (h === 'stick') show('c3s');
+      if (h === 'keep') show('c3k');
+    }
+  }
+})();
+</script>
+</body>
+</html>
