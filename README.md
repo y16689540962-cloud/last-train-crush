@@ -15,3 +15,8 @@
 
 ## License
 游戏代码 MIT。文案与角色设定 © 作者保留权利。
+
+## 3D 在场感样片（实验分支）
+- <https://y16689540962-cloud.github.io/last-train-crush/slice/>
+- 技术：three.js（本地 vendor，零 CDN）· 程序化 Blender 资产 · Web Audio
+- 说明：这是验证「3D 是否值得做下去」的技术样片，60 秒氛围 + 长按倾身偷看 + 三首 BGM 切换；正式版仍是 2D Demo

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<!-- 3D 垂直切片「在场感样片」· 末班车的心动 v0.2.0-3d-slice
+     纯 ES modules · 零 CDN · 零图片资产（纹理 canvas/GLSL 程序化）
+     人物永远剪影无五官 · 中文直角引号 · 视觉纪律与 2D Demo 同源 -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a1020">
+<link rel="icon" href="data:,">
+<title>末班车的心动 · 3D 在场感样片</title>
+<style>
+  :root {
+    --paper: #F7F4EF;
+    --ink: #262320;
+    --ink-soft: #9a917f;
+    --dusk: oklch(0.55 0.09 255);
+    --serif: "Newsreader", "Noto Serif SC", "Songti SC", serif;
+    --sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --vig: 0;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html { font-synthesis:none; line-break:strict; }
+  body {
+    background:#07090f; color:var(--ink);
+    font-family:var(--sans); font-size:14px; line-height:1.8;
+    display:flex; justify-content:center; align-items:flex-start;
+    min-height:100vh; padding:24px 12px; text-wrap:pretty;
+  }
+  .bezel {
+    width:100%; max-width:480px; position:relative;
+    border-radius:34px; overflow:hidden;
+    box-shadow:0 0 0 10px #14161c, 0 30px 80px rgba(0,0,0,.8);
+    height:844px; max-height:calc(100vh - 48px); min-height:620px;
+    background:#0a1020;
+  }
+  #wrap { position:absolute; inset:0; touch-action:none; }
+  #gl { width:100%; height:100%; display:block; }
+  /* 暗角：长按倾身时加深（--vig 由 main.js 驱动） */
+  #vignette {
+    position:absolute; inset:0; pointer-events:none; z-index:5;
+    background:radial-gradient(ellipse at 50% 46%, transparent 42%, rgba(4,6,12,0.85) 100%);
+    opacity:calc(var(--vig) * 1);
+    transition:opacity .25s ease;
+  }
+  /* 顶栏标题纸感 scrim：暗→透明渐变垫底 */
+  #topbar::before {
+    content:""; position:absolute; top:-14px; left:-16px; right:-16px; height:86px;
+    background:linear-gradient(180deg, rgba(247,244,239,0.14) 0%, rgba(247,244,239,0.05) 55%, transparent 100%);
+    pointer-events:none;
+  }
+  /* 底部提示纸感 scrim（对称，保 hint 可读） */
+  #hint::before {
+    content:""; position:absolute; left:-32px; right:-32px; bottom:-14px; height:56px; z-index:-1;
+    background:linear-gradient(0deg, rgba(247,244,239,0.10) 0%, transparent 100%);
+  }
+  /* 顶栏 UI */
+  .ui { position:absolute; z-index:10; user-select:none; -webkit-user-select:none; }
+  #topbar {
+    top:14px; left:16px; right:16px;
+    display:flex; justify-content:space-between; align-items:center;
+    pointer-events:none;
+  }
+  #topbar .t {
+    font-family:var(--serif); font-size:13px; letter-spacing:.18em;
+    color:rgba(247,244,239,.72); text-shadow:0 1px 8px rgba(0,0,0,.6);
+  }
+  #topbar .t b { color:var(--dusk); font-weight:600; }
+  .btnrow { display:flex; gap:10px; pointer-events:auto; }
+  .icobtn {
+    width:36px; height:36px; border:1px solid rgba(247,244,239,.28);
+    background:rgba(10,16,32,.45); backdrop-filter:blur(4px);
+    color:rgba(247,244,239,.85); cursor:pointer;
+    display:flex; align-items:center; justify-content:center; border-radius:10px;
+    transition:color .2s, border-color .2s;
+  }
+  .icobtn:hover { border-color:rgba(247,244,239,.6); }
+  .icobtn svg { display:block; }
+  #audioBtn .ml { display:none; }
+  #audioBtn.off .wv { display:none; }
+  #audioBtn.off .ml { display:block; }
+  #calmBtn .lb {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-45deg);
+    width:18px; height:2px; background:currentColor; border-radius:2px; opacity:0; transition:opacity .2s;
+  }
+  #calmBtn.on .lb { opacity:1; }
+  /* 耳机三选一：右下三颗唱片 */
+  #song {
+    right:16px; bottom:12px; display:flex; gap:12px; align-items:center;
+    background:rgba(10,16,32,.35); border:1px solid rgba(247,244,239,.14);
+    padding:10px 14px; border-radius:24px; backdrop-filter:blur(4px);
+    pointer-events:auto; cursor:default;
+  }
+  #song .disc {
+    width:26px; height:26px; border-radius:50%; cursor:pointer; position:relative;
+    border:2px solid rgba(247,244,239,.4);
+    background:
+      radial-gradient(circle at 50% 50%, rgba(247,244,239,.9) 0 2px, transparent 2.5px),
+      repeating-radial-gradient(circle at 50% 50%, rgba(247,244,239,.10) 0 1.5px, transparent 1.5px 4px),
+      linear-gradient(140deg, #2a3247, #171c2b);
+    transition:transform .15s, border-color .2s, box-shadow .2s;
+  }
+  #song .disc:hover { transform:scale(1.1); }
+  #song .disc.on {
+    border-color:var(--dusk);
+    box-shadow:0 0 0 3px rgba(90,110,190,.25), 0 0 14px rgba(90,110,190,.35);
+  }
+  #song .disc.on::after {  /* 墨圈标记 */
+    content:""; position:absolute; inset:-6px; border-radius:50%;
+    border:1px solid rgba(140,155,225,.55);
+  }
+  #songName {
+    position:absolute; right:18px; bottom:70px;
+    font-family:var(--serif); font-size:11.5px; letter-spacing:.16em;
+    color:rgba(247,244,239,.55); text-align:right; pointer-events:none;
+    opacity:0; transition:opacity .4s;
+  }
+  #songName.show { opacity:1; }
+  /* 底部提示行 */
+  #scrim {
+    left:0; right:0; bottom:0; height:190px; pointer-events:none;
+    background:linear-gradient(to top, rgba(10,16,32,.78) 0%, rgba(10,16,32,.45) 38%, rgba(10,16,32,0) 100%);
+  }
+  #hint {
+    left:0; right:0; bottom:88px; text-align:center; pointer-events:none;
+    font-family:var(--serif); font-size:12.5px; letter-spacing:.2em;
+    color:rgba(247,244,239,.6); text-shadow:0 1px 8px rgba(0,0,0,.7);
+    transition:opacity .6s; position:absolute;
+  }
+  body.peeking #hint { opacity:0; }
+  /* 长按提示浮字 */
+  #peek {
+    left:0; right:0; top:16%; text-align:center; pointer-events:none;
+    font-family:var(--serif); font-size:15px; letter-spacing:.3em;
+    color:rgba(247,244,239,.0); transition:opacity .5s; z-index:6;
+  }
+  body.peeking #peek { color:rgba(247,244,239,.75); }
+  /* 加载遮罩：1.5s 内淡出（GLB 本地 500KB，通常 <300ms） */
+  #loading {
+    position:absolute; inset:0; z-index:30; background:#0a1020;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+    transition:opacity .6s ease; color:rgba(247,244,239,.8);
+  }
+  #loading.off { opacity:0; pointer-events:none; }
+  #loading .k { font-family:var(--serif); font-size:15px; letter-spacing:.4em; }
+  #loading .bar { width:120px; height:2px; background:rgba(247,244,239,.15); overflow:hidden; border-radius:2px; }
+  #loading .bar i { display:block; height:100%; width:40%; background:var(--dusk); animation:ld 1.1s ease-in-out infinite; }
+  @keyframes ld { 0%{transform:translateX(-100%);} 100%{transform:translateX(320%);} }
+  /* 无 WebGL 兜底 */
+  #nogl {
+    position:absolute; inset:0; z-index:40; background:#0a1020; display:none;
+    flex-direction:column; align-items:center; justify-content:center; gap:10px;
+    color:rgba(247,244,239,.85); text-align:center; padding:0 32px;
+  }
+  #nogl .ng-t { font-family:var(--serif); font-size:19px; letter-spacing:.2em; margin-bottom:6px; }
+  #nogl p { font-size:13px; color:rgba(247,244,239,.55); line-height:2; }
+  #nogl a {
+    margin-top:14px; padding:11px 22px; border:1px solid rgba(247,244,239,.4);
+    color:rgba(247,244,239,.85); text-decoration:none; font-size:13px; letter-spacing:.16em;
+  }
+  #dbg {
+    left:14px; bottom:14px; font-size:10px; color:rgba(247,244,239,.28);
+    letter-spacing:.1em; pointer-events:none; font-variant-numeric:tabular-nums;
+  }
+  @media (max-width:480px){
+    body { padding:0; }
+    .bezel { border-radius:0; box-shadow:none; height:100vh; max-height:none; min-height:100vh; }
+  }
+</style>
+</head>
+<body>
+<div class="bezel">
+  <div id="wrap">
+    <canvas id="gl"></canvas>
+  </div>
+  <div id="vignette"></div>
+
+  <div class="ui" id="topbar">
+    <span class="t">末班车的心动 · <b>3D</b> 样片</span>
+    <span class="btnrow">
+      <button class="icobtn" id="calmBtn" aria-label="减晃开关" title="减晃">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+          <path d="M3 12c2.2 0 2.2-4 4.4-4s2.2 8 4.4 8 2.2-8 4.4-8 2.2 4 4.4 4"/>
+          <line class="lb" x1="5" y1="19" x2="19" y2="5"/>
+        </svg>
+      </button>
+      <button class="icobtn" id="audioBtn" aria-label="声音开关">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 9.5v5h3.4L12 18.6V5.4L7.4 9.5H4z" fill="currentColor" stroke="none"/>
+          <path class="wv" d="M15.2 9.6c1.15 1.35 1.15 3.45 0 4.8"/>
+          <path class="wv" d="M17.6 7.6c2.05 2.45 2.05 6.35 0 8.8"/>
+          <line class="ml" x1="4.5" y1="19.5" x2="19.5" y2="4.5"/>
+        </svg>
+      </button>
+    </span>
+  </div>
+
+  <div class="ui" id="songName"></div>
+  <div class="ui" id="song">
+    <span class="disc" id="song0" role="button" aria-label="曲目一"></span>
+    <span class="disc" id="song1" role="button" aria-label="曲目二"></span>
+    <span class="disc" id="song2" role="button" aria-label="曲目三"></span>
+  </div>
+
+  <div class="ui" id="peek">倾身……</div>
+  <div class="ui" id="scrim"></div>
+  <div class="ui" id="hint">按住屏幕，倾身看一眼 · 戴上耳机</div>
+  <div class="ui" id="dbg"></div>
+
+  <div id="loading">
+    <div class="k">23:47</div>
+    <div class="bar"><i></i></div>
+  </div>
+
+  <div id="nogl">
+    <div class="ng-t">需要 WebGL</div>
+    <p>当前浏览器不支持 WebGL，<br>无法进入这节深夜的车厢。</p>
+    <a href="https://y16689540962-cloud.github.io/last-train-crush/">去玩 2D 版 Demo →</a>
+  </div>
+</div>
+
+<script>
+  // 曲目名显示（与 main.js 的切换联动：监听 .on 类变化）
+  new MutationObserver(() => {
+    const el = document.getElementById('songName');
+    const names = ['A 小调 · 行板', 'C 大调 · 慢板', 'D 小调 · 夜行'];
+    for (let i = 0; i < 3; i++) {
+      if (document.getElementById('song' + i).classList.contains('on')) {
+        el.textContent = names[i];
+        el.classList.add('show');
+        clearTimeout(window.__snT);
+        window.__snT = setTimeout(() => el.classList.remove('show'), 2200);
+      }
+    }
+  }).observe(document.getElementById('song'), { subtree: true, attributes: true, attributeFilter: ['class'] });
+</script>
+
+<script type="importmap">
+{ "imports": { "three": "./js/three.module.js" } }
+</script>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
